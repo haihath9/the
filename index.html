@@ -15,10 +15,6 @@
   <!-- Babel CDN để biên dịch JSX trực tiếp trên trình duyệt -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <!-- Google API Client & Google Identity Services (Cho tính năng đồng bộ Google Drive) -->
-  <script async defer src="https://apis.google.com/js/api.js"></script>
-  <script async defer src="https://accounts.google.com/gsi/client"></script>
-  
   <!-- Google Fonts - Inter -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   
@@ -26,17 +22,55 @@
     body {
       font-family: 'Inter', sans-serif;
     }
+    /* Tùy chỉnh thanh cuộn cho đẹp hơn */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
   </style>
+
+  <!-- Importmap cho Hệ thống Firebase Cloud -->
+  <script type="importmap">
+    {
+      "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"
+      }
+    }
+  </script>
 </head>
 <body class="bg-gray-50 text-gray-800">
 
   <div id="root"></div>
 
-  <!-- Kịch bản React viết dưới dạng Babel JSX -->
-  <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+  <!-- Kịch bản React viết dưới dạng Babel JSX (Có hỗ trợ Module Import) -->
+  <script type="text/babel" data-type="module">
+    import { initializeApp } from "firebase/app";
+    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "firebase/auth";
+    import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
 
-    // --- INLINE SVG ICONS (Thay thế Lucide-React để tối ưu hóa Shared Hosting) ---
+    // --- CẤU HÌNH CLOUD DATABASE (Đã được điền cố định thông tin của bạn) ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyCsHSGwOXOs4Ah89mYCVpL13PX_nvIp3P4",
+      authDomain: "credit-791a3.firebaseapp.com",
+      projectId: "credit-791a3",
+      storageBucket: "credit-791a3.firebasestorage.app",
+      messagingSenderId: "633322726523",
+      appId: "1:633322726523:web:ebf19d71d582a150beaede",
+      measurementId: "G-48SHGFHSW9"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    
+    // Sử dụng ID ứng dụng cố định để lưu trữ trong Firestore công khai của bạn
+    const appId = 'credittracker-public-app';
+
+    const { useState, useEffect } = React;
+
+    // --- INLINE SVG ICONS ---
     const IconCreditCard = ({ size = 24, className = "" }) => (
       <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
         <rect x="2" y="5" width="20" height="14" rx="2" ry="2" />
@@ -129,9 +163,24 @@
       </svg>
     );
 
-    const IconCloud = ({ size = 24, className = "" }) => (
+    const IconCloudSync = ({ size = 24, className = "" }) => (
       <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        <path d="M17.5 19A3.5 3.5 0 0 0 21 15.5c0-2.79-2.54-4.5-5-4.5-.42-1.89-2-3-3.5-3A4 4 0 0 0 8.5 12c-2.42 0-4.5 1.72-4.5 4.5A3.5 3.5 0 0 0 7.5 19z" />
+        <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+        <path d="M12 12v9" />
+        <path d="m8 17 4-4 4 4" />
+      </svg>
+    );
+
+    const IconLoader = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`animate-spin ${className}`}>
+        <line x1="12" y1="2" x2="12" y2="6" />
+        <line x1="12" y1="18" x2="12" y2="22" />
+        <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+        <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+        <line x1="2" y1="12" x2="6" y2="12" />
+        <line x1="18" y1="12" x2="22" y2="12" />
+        <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
+        <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
       </svg>
     );
 
@@ -149,37 +198,6 @@
       { id: 'red', class: 'bg-gradient-to-br from-red-700 to-rose-500' },
     ];
 
-    const INITIAL_CARDS = [
-      {
-        id: '1',
-        name: 'Vietcombank Signature',
-        imageUrl: '',
-        theme: 'bg-gradient-to-br from-gray-900 to-gray-700',
-        statementDay: 20,
-        dueDay: 5,
-        amountDue: 15500000,
-        isPaid: false,
-        actualPaymentDate: null,
-        reminderDate: '',
-        reminderTime: '',
-        reminderSent: false
-      },
-      {
-        id: '2',
-        name: 'VIB Super Card',
-        imageUrl: '',
-        theme: 'bg-gradient-to-br from-blue-700 to-blue-500',
-        statementDay: 10,
-        dueDay: 25,
-        amountDue: 4200000,
-        isPaid: true,
-        actualPaymentDate: '2026-05-20',
-        reminderDate: '',
-        reminderTime: '',
-        reminderSent: false
-      }
-    ];
-
     // --- SOUND NOTIFICATION ---
     const playNotificationSound = () => {
       try {
@@ -187,6 +205,7 @@
         if (!AudioContext) return;
         const ctx = new AudioContext();
         
+        // Tiếng bíp thứ nhất (D5)
         const osc1 = ctx.createOscillator();
         const gain1 = ctx.createGain();
         osc1.connect(gain1);
@@ -198,6 +217,7 @@
         osc1.start(ctx.currentTime);
         osc1.stop(ctx.currentTime + 0.15);
 
+        // Tiếng bíp thứ hai (A5)
         setTimeout(() => {
           const osc2 = ctx.createOscillator();
           const gain2 = ctx.createGain();
@@ -210,6 +230,7 @@
           osc2.start(ctx.currentTime);
           osc2.stop(ctx.currentTime + 0.25);
         }, 150);
+
       } catch (e) {
         console.warn("Không thể kích hoạt âm báo tự động:", e);
       }
@@ -237,17 +258,10 @@
 
     // --- MAIN APP COMPONENT ---
     function App() {
-      // Tải dữ liệu thẻ
-      const [cards, setCards] = useState(() => {
-        const savedCards = localStorage.getItem('credittracker_cards');
-        return savedCards ? JSON.parse(savedCards) : INITIAL_CARDS;
-      });
-
-      // Tải cấu hình API Google (Nếu có)
-      const [googleConfig, setGoogleConfig] = useState(() => {
-        const savedConfig = localStorage.getItem('credittracker_google_config');
-        return savedConfig ? JSON.parse(savedConfig) : { clientId: '', apiKey: '' };
-      });
+      const [cards, setCards] = useState([]);
+      const [isLoading, setIsLoading] = useState(true);
+      const [user, setUser] = useState(null);
+      const [authError, setAuthError] = useState(null);
       
       const [notifications, setNotifications] = useState([]);
       const [isSoundEnabled, setIsSoundEnabled] = useState(true);
@@ -256,7 +270,6 @@
       const [isCardModalOpen, setIsCardModalOpen] = useState(false);
       const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
       const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
-      const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
       
       // Active Selection States
       const [editingCard, setEditingCard] = useState(null);
@@ -264,39 +277,75 @@
       const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
       const [newStatementAmount, setNewStatementAmount] = useState('');
       
-      // Google API State
-      const [googleAccessToken, setGoogleAccessToken] = useState(null);
-      const [googleUserEmail, setGoogleUserEmail] = useState(null);
-      const [cloudStatus, setCloudStatus] = useState('Chưa kết nối');
-      const [isCloudLoading, setIsCloudLoading] = useState(false);
-      const tokenClientRef = useRef(null);
-
       // Form Input State
       const [cardForm, setCardForm] = useState({
         name: '', imageUrl: '', theme: THEMES[0].class, statementDay: '', dueDay: '', reminderDate: '', reminderTime: ''
       });
 
-      // Lưu trữ cục bộ
+      // 1. Khởi tạo xác thực (Bảo mật xử lý ngoại lệ Custom Token Mismatch)
       useEffect(() => {
-        localStorage.setItem('credittracker_cards', JSON.stringify(cards));
-      }, [cards]);
+        const initAuth = async () => {
+          try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+              try {
+                // Thử đăng nhập bằng Custom Token từ Sandbox
+                await signInWithCustomToken(auth, __initial_auth_token);
+              } catch (tokenError) {
+                // Nếu mismatch do cấu hình Firebase cá nhân của user, chuyển hướng sang đăng nhập ẩn danh ngay
+                console.warn("Lỗi Custom Token, tự động chuyển sang Đăng nhập Ẩn danh:", tokenError);
+                await signInAnonymously(auth);
+              }
+            } else {
+              await signInAnonymously(auth);
+            }
+          } catch (error) {
+            console.error("Lỗi đăng nhập Firebase:", error);
+            setAuthError(error.message);
+            setIsLoading(false);
+          }
+        };
+        initAuth();
 
-      // Lưu cấu hình Google Drive Client ID / API Key
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+          setUser(currentUser);
+        });
+        return () => unsubscribe();
+      }, []);
+
+      // 2. Lắng nghe dữ liệu Live Sync từ Firebase Cloud Database
       useEffect(() => {
-        localStorage.setItem('credittracker_google_config', JSON.stringify(googleConfig));
-      }, [googleConfig]);
+        if (!user) return;
+        
+        const cardsRef = collection(db, 'artifacts', appId, 'public', 'data', 'cards');
+        const unsubscribe = onSnapshot(cardsRef, (snapshot) => {
+          const cardsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          
+          // Sắp xếp: thẻ chưa trả nợ lên trước
+          cardsData.sort((a, b) => (a.isPaid === b.isPaid ? 0 : a.isPaid ? 1 : -1));
+          
+          setCards(cardsData);
+          setIsLoading(false);
+        }, (error) => {
+          console.error("Lỗi tải dữ liệu Cloud:", error);
+          setAuthError("Không thể lấy dữ liệu. Hãy đảm bảo bạn đã bật 'Firestore Database' và cấu hình Rules cho phép đọc/ghi trên Firebase Console.");
+          setIsLoading(false);
+        });
 
-      // --- TRÌNH BÁO THỨC HẸN GIỜ ---
+        return () => unsubscribe();
+      }, [user]);
+
+      // 3. Trình ngầm kiểm tra báo thức và giờ hẹn thanh toán
       useEffect(() => {
         const checkReminders = () => {
+          if (!user || cards.length === 0) return;
+          
           const now = new Date();
           const currentDate = now.toISOString().split('T')[0];
           const currentHour = now.getHours().toString().padStart(2, '0');
           const currentMinute = now.getMinutes().toString().padStart(2, '0');
           const currentTime = `${currentHour}:${currentMinute}`;
 
-          let isUpdated = false;
-          const updatedCards = cards.map(card => {
+          cards.forEach(card => {
             if (
               !card.isPaid &&
               card.reminderDate === currentDate &&
@@ -307,6 +356,7 @@
                 playNotificationSound();
               }
 
+              // Đưa thông báo lên màn hình
               setNotifications(prev => [
                 ...prev,
                 {
@@ -317,201 +367,18 @@
                 }
               ]);
               
-              isUpdated = true;
-              return { ...card, reminderSent: true };
+              // Cập nhật trạng thái "đã báo" lên Cloud
+              const cardRef = doc(db, 'artifacts', appId, 'public', 'data', 'cards', card.id);
+              setDoc(cardRef, { reminderSent: true }, { merge: true });
             }
-            return card;
           });
-
-          if (isUpdated) {
-            setCards(updatedCards);
-          }
         };
 
-        const intervalId = setInterval(checkReminders, 10000);
+        const intervalId = setInterval(checkReminders, 10000); // 10 giây quét 1 lần
         return () => clearInterval(intervalId);
-      }, [cards, isSoundEnabled]);
+      }, [cards, isSoundEnabled, user]);
 
-      // --- TÍCH HỢP GOOGLE DRIVE SYNC ---
-      
-      // Khởi chạy Google client (GAPI & GIS)
-      useEffect(() => {
-        if (!googleConfig.clientId || !googleConfig.apiKey) return;
-
-        const initGapi = () => {
-          gapi.client.init({
-            apiKey: googleConfig.apiKey,
-            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-          }).then(() => {
-            setCloudStatus('Sẵn sàng kết nối');
-          }).catch(err => {
-            console.error("Lỗi khởi tạo GAPI:", err);
-            setCloudStatus('Lỗi cấu hình API Google');
-          });
-        };
-
-        const loadGapi = () => {
-          gapi.load('client', initGapi);
-        };
-
-        // Khởi tạo Identity Client Token
-        try {
-          tokenClientRef.current = google.accounts.oauth2.initTokenClient({
-            client_id: googleConfig.clientId,
-            scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email',
-            callback: (resp) => {
-              if (resp.error !== undefined) {
-                setCloudStatus('Lỗi xác thực Google');
-                return;
-              }
-              setGoogleAccessToken(resp.access_token);
-              setCloudStatus('Đã đăng nhập Google');
-              fetchUserProfile(resp.access_token);
-            },
-          });
-          loadGapi();
-        } catch (e) {
-          console.error("Lỗi khởi tạo GIS:", e);
-        }
-      }, [googleConfig.clientId, googleConfig.apiKey]);
-
-      const fetchUserProfile = (token) => {
-        fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        .then(res => res.json())
-        .then(data => {
-          if (data.email) setGoogleUserEmail(data.email);
-        })
-        .catch(err => console.error("Không thể lấy thông tin User:", err));
-      };
-
-      const handleGoogleSignIn = () => {
-        if (!tokenClientRef.current) {
-          alert("Vui lòng điền thông tin Client ID và API Key trước!");
-          return;
-        }
-        tokenClientRef.current.requestAccessToken({ prompt: 'consent' });
-      };
-
-      const handleGoogleSignOut = () => {
-        if (googleAccessToken) {
-          google.accounts.oauth2.revoke(googleAccessToken);
-        }
-        setGoogleAccessToken(null);
-        setGoogleUserEmail(null);
-        setCloudStatus('Sẵn sàng kết nối');
-      };
-
-      // ĐỒNG BỘ: ĐẨY LÊN GOOGLE DRIVE (Sao lưu)
-      const backupToDrive = async () => {
-        if (!googleAccessToken) {
-          alert("Vui lòng đăng nhập Google Drive trước!");
-          return;
-        }
-        setIsCloudLoading(true);
-        setCloudStatus('Đang sao lưu...');
-
-        try {
-          // Tìm xem tệp đã tồn tại chưa
-          const listResponse = await gapi.client.drive.files.list({
-            q: "name = 'credittracker_backup.json' and trashed = false",
-            fields: 'files(id)',
-            spaces: 'drive'
-          });
-
-          const files = listResponse.result.files;
-          const fileContent = JSON.stringify({ cards, updatedAt: new Date().toISOString() });
-          const fileMetadata = { name: 'credittracker_backup.json', mimeType: 'application/json' };
-
-          if (files && files.length > 0) {
-            // Cập nhật tệp cũ đã tồn tại
-            const fileId = files[0].id;
-            await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-              method: 'PATCH',
-              headers: {
-                Authorization: `Bearer ${googleAccessToken}`,
-                'Content-Type': 'application/json',
-              },
-              body: fileContent
-            });
-          } else {
-            // Tạo mới tệp sao lưu trên Drive
-            const metadataResponse = await gapi.client.drive.files.create({
-              resource: fileMetadata,
-              fields: 'id'
-            });
-            const newFileId = metadataResponse.result.id;
-
-            await fetch(`https://www.googleapis.com/upload/drive/v3/files/${newFileId}?uploadType=media`, {
-              method: 'PATCH',
-              headers: {
-                Authorization: `Bearer ${googleAccessToken}`,
-                'Content-Type': 'application/json',
-              },
-              body: fileContent
-            });
-          }
-
-          setCloudStatus('Sao lưu thành công!');
-          alert("Sao lưu dữ liệu lên Google Drive thành công!");
-        } catch (error) {
-          console.error("Lỗi đồng bộ sao lưu:", error);
-          setCloudStatus('Sao lưu thất bại');
-          alert("Sao lưu thất bại, vui lòng đăng nhập lại và thử lại.");
-        } finally {
-          setIsCloudLoading(false);
-        }
-      };
-
-      // ĐỒNG BỘ: TẢI VỀ TỪ GOOGLE DRIVE (Khôi phục)
-      const restoreFromDrive = async () => {
-        if (!googleAccessToken) {
-          alert("Vui lòng đăng nhập Google Drive trước!");
-          return;
-        }
-        setIsCloudLoading(true);
-        setCloudStatus('Đang tải dữ liệu...');
-
-        try {
-          const listResponse = await gapi.client.drive.files.list({
-            q: "name = 'credittracker_backup.json' and trashed = false",
-            fields: 'files(id)',
-            spaces: 'drive'
-          });
-
-          const files = listResponse.result.files;
-          if (files && files.length > 0) {
-            const fileId = files[0].id;
-            const contentResponse = await gapi.client.drive.files.get({
-              fileId: fileId,
-              alt: 'media'
-            });
-
-            const backupData = contentResponse.result;
-            if (backupData && backupData.cards) {
-              if (window.confirm(`Tìm thấy bản sao lưu trên Drive. Bạn có muốn khôi phục và ghi đè toàn bộ dữ liệu hiện tại trên thiết bị này?`)) {
-                setCards(backupData.cards);
-                setCloudStatus('Khôi phục thành công!');
-                alert("Khôi phục thành công! Trang sẽ cập nhật dữ liệu mới.");
-              }
-            } else {
-              alert("File sao lưu rỗng hoặc sai định dạng.");
-            }
-          } else {
-            alert("Không tìm thấy tệp sao lưu nào của ứng dụng trên Google Drive!");
-            setCloudStatus('Không có tệp sao lưu');
-          }
-        } catch (error) {
-          console.error("Lỗi khôi phục:", error);
-          setCloudStatus('Khôi phục thất bại');
-          alert("Không thể khôi phục dữ liệu từ đám mây.");
-        } finally {
-          setIsCloudLoading(false);
-        }
-      };
-
-      // Tính tổng tiền nợ và tiền đã thanh toán
+      // Tính toán dữ liệu thống kê tổng thể
       const totalDue = cards.filter(c => !c.isPaid).reduce((sum, c) => sum + Number(c.amountDue || 0), 0);
       const totalPaid = cards.filter(c => c.isPaid).reduce((sum, c) => sum + Number(c.amountDue || 0), 0);
 
@@ -528,27 +395,33 @@
         setIsCardModalOpen(true);
       };
 
-      const handleSaveCard = (e) => {
+      const handleSaveCard = async (e) => {
         e.preventDefault();
-        if (editingCard) {
-          setCards(cards.map(c => c.id === editingCard.id ? { ...c, ...cardForm } : c));
-        } else {
-          const newCard = {
-            ...cardForm,
-            id: Date.now().toString(),
-            amountDue: 0,
-            isPaid: false,
-            actualPaymentDate: null,
-            reminderSent: false
-          };
-          setCards([...cards, newCard]);
-        }
+        if (!user) return;
+
+        const cardId = editingCard ? editingCard.id : Date.now().toString();
+        const cardData = editingCard 
+          ? { ...editingCard, ...cardForm } 
+          : { 
+              ...cardForm, 
+              amountDue: 0, 
+              isPaid: false, 
+              actualPaymentDate: null, 
+              reminderSent: false 
+            };
+
+        // Lưu trực tiếp lên Cloud
+        const cardRef = doc(db, 'artifacts', appId, 'public', 'data', 'cards', cardId);
+        await setDoc(cardRef, cardData);
+        
         setIsCardModalOpen(false);
       };
 
-      const handleDeleteCard = (id) => {
-        if (window.confirm('Bạn có chắc muốn xóa thẻ này? Mọi dữ liệu sẽ mất.')) {
-          setCards(cards.filter(c => c.id !== id));
+      const handleDeleteCard = async (id) => {
+        if (window.confirm('Bạn có thực sự muốn xóa thẻ này? Mọi dữ liệu sẽ bị xóa cho tất cả người dùng.')) {
+          if (!user) return;
+          const cardRef = doc(db, 'artifacts', appId, 'public', 'data', 'cards', id);
+          await deleteDoc(cardRef);
         }
       };
 
@@ -558,13 +431,16 @@
         setIsPaymentModalOpen(true);
       };
 
-      const handleConfirmPayment = (e) => {
+      const handleConfirmPayment = async (e) => {
         e.preventDefault();
-        setCards(cards.map(c => 
-          c.id === selectedCard.id 
-            ? { ...c, isPaid: true, actualPaymentDate: paymentDate } 
-            : c
-        ));
+        if (!user || !selectedCard) return;
+
+        const cardRef = doc(db, 'artifacts', appId, 'public', 'data', 'cards', selectedCard.id);
+        await setDoc(cardRef, { 
+          isPaid: true, 
+          actualPaymentDate: paymentDate 
+        }, { merge: true });
+        
         setIsPaymentModalOpen(false);
       };
 
@@ -574,19 +450,18 @@
         setIsStatementModalOpen(true);
       };
 
-      const handleConfirmStatement = (e) => {
+      const handleConfirmStatement = async (e) => {
         e.preventDefault();
-        setCards(cards.map(c => 
-          c.id === selectedCard.id 
-            ? { 
-                ...c, 
-                amountDue: Number(newStatementAmount), 
-                isPaid: false, 
-                actualPaymentDate: null, 
-                reminderSent: false 
-              } 
-            : c
-        ));
+        if (!user || !selectedCard) return;
+
+        const cardRef = doc(db, 'artifacts', appId, 'public', 'data', 'cards', selectedCard.id);
+        await setDoc(cardRef, {
+          amountDue: Number(newStatementAmount),
+          isPaid: false,
+          actualPaymentDate: null,
+          reminderSent: false
+        }, { merge: true });
+
         setIsStatementModalOpen(false);
       };
 
@@ -594,15 +469,52 @@
         setNotifications(notifications.filter(n => n.id !== id));
       };
 
+      if (isLoading) {
+        return (
+          <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-gray-50 text-indigo-600">
+             <IconLoader size={48} />
+             <p className="font-semibold text-gray-500 animate-pulse text-center px-4">
+                Đang kết nối Cloud của bạn: <strong className="text-gray-700 block mt-1">credit-791a3</strong>
+             </p>
+          </div>
+        )
+      }
+
+      if (authError) {
+        return (
+          <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-red-50 text-red-700 text-center">
+            <IconAlertCircle size={48} className="mb-4" />
+            <h1 className="text-xl font-bold mb-2">Lỗi cấu hình Firebase</h1>
+            <p className="max-w-md text-sm text-red-600 mb-4">{authError}</p>
+            <div className="text-left bg-white p-4 rounded-xl border border-red-100 max-w-lg text-xs text-gray-600 space-y-2">
+              <p className="font-bold text-gray-800">Các bước kiểm tra để ứng dụng hoạt động:</p>
+              <p>1. Hãy truy cập vào <strong>Firebase Console</strong> dự án <code>credit-791a3</code>.</p>
+              <p>2. Chọn menu <strong>Authentication</strong> &gt; tab <strong>Sign-in method</strong> &gt; Bấm nút <strong>Add new provider</strong> &gt; Chọn <strong>Anonymous (Ẩn danh)</strong> và bấm Enable.</p>
+              <p>3. Chọn menu <strong>Firestore Database</strong> &gt; Tạo database (nhớ chọn đúng vị trí) &gt; Chuyển sang tab <strong>Rules</strong> và thay đổi cấu hình thành:</p>
+              <pre className="bg-gray-100 p-2 rounded text-[10px] overflow-x-auto text-indigo-600">
+{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="min-h-screen bg-gray-50 text-gray-800 font-sans relative">
           
-          {/* Toast Alerts */}
+          {/* Hệ thống Toast Alerts góc phải */}
           <div className="fixed top-20 right-4 z-50 flex flex-col gap-3 pointer-events-none max-w-sm w-full px-4 sm:px-0">
             {notifications.map(note => (
               <div 
                 key={note.id} 
-                className="bg-white border-l-4 border-indigo-600 shadow-2xl rounded-r-xl p-4 w-full pointer-events-auto relative border border-gray-100 flex flex-col"
+                className="bg-white border-l-4 border-indigo-600 shadow-2xl rounded-r-xl p-4 w-full pointer-events-auto relative border-y border-r border-gray-100 flex flex-col"
               >
                 <button 
                   onClick={() => removeNotification(note.id)} 
@@ -625,34 +537,25 @@
             <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
               <div className="flex items-center gap-2 text-indigo-600">
                 <IconCreditCard size={28} className="text-indigo-600" />
-                <h1 className="text-xl font-extrabold tracking-tight">CreditTracker Pro</h1>
+                <h1 className="text-xl font-extrabold tracking-tight hidden sm:block">CreditTracker Pro</h1>
               </div>
               
-              <div className="flex items-center gap-2">
-                {/* Nút mây đồng bộ */}
-                <button 
-                  onClick={() => setIsCloudModalOpen(true)}
-                  className={`p-2 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-semibold ${googleAccessToken ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-gray-200'}`}
-                  title="Đồng bộ Google Drive"
-                >
-                  <IconCloud size={16} className={googleAccessToken ? 'animate-pulse text-emerald-600' : 'text-gray-500'} />
-                  <span className="hidden sm:inline">{googleAccessToken ? "Đồng bộ" : "Thiết lập Cloud"}</span>
-                </button>
-
-                {/* Bật/Tắt âm */}
+              <div className="flex items-center gap-2.5">
+                {/* Bật/Tắt âm thanh báo */}
                 <button 
                   onClick={() => setIsSoundEnabled(!isSoundEnabled)}
                   className={`p-2 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-semibold ${isSoundEnabled ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'}`}
                 >
                   {isSoundEnabled ? <IconVolume size={16} /> : <IconVolumeX size={16} />}
+                  <span className="hidden md:inline">{isSoundEnabled ? "Đang bật âm" : "Đã tắt âm"}</span>
                 </button>
 
                 <button 
                   onClick={handleOpenAddCard}
-                  className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-lg font-bold transition-colors shadow-sm text-sm"
+                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 sm:px-4 rounded-lg font-bold transition-colors shadow-sm text-sm"
                 >
                   <IconPlus size={16} />
-                  <span>Mới</span>
+                  <span>Thêm thẻ mới</span>
                 </button>
               </div>
             </div>
@@ -660,7 +563,7 @@
 
           <main className="max-w-6xl mx-auto px-4 py-8">
             
-            {/* Widget Thống kê */}
+            {/* Widget Tổng Quan */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex items-center gap-5">
                 <div className="w-14 h-14 rounded-full bg-rose-50 flex items-center justify-center text-rose-600 flex-shrink-0 border border-rose-100">
@@ -683,22 +586,21 @@
               </div>
             </div>
 
-            {/* Danh sách thẻ */}
-            <div className="mb-6 flex justify-between items-center">
-              <h2 className="text-lg font-bold text-gray-800">Thẻ tín dụng của tôi</h2>
-              {googleUserEmail && (
-                <span className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-1 rounded-full font-medium flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  Đã kết nối: {googleUserEmail}
-                </span>
-              )}
+            {/* Tiêu đề danh sách */}
+            <div className="mb-6 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+              <h2 className="text-lg font-bold text-gray-800">Danh sách thẻ tín dụng</h2>
+              <span className="text-[11px] text-emerald-700 bg-emerald-100/80 px-3 py-1.5 rounded-full font-bold flex items-center gap-1.5 w-fit border border-emerald-200 shadow-sm" title="Kết nối trực tiếp tới credit-791a3">
+                <IconCloudSync size={14} className="animate-pulse" /> 
+                Live Sync: credit-791a3
+              </span>
             </div>
 
+            {/* Danh sách thẻ */}
             {cards.length === 0 ? (
               <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300">
                 <IconCreditCard size={48} className="mx-auto text-gray-300 mb-4" />
                 <h3 className="text-lg font-bold text-gray-900 mb-1">Chưa có thẻ nào</h3>
-                <p className="text-gray-500 mb-6 text-sm">Vui lòng bấm Thêm thẻ mới để quản lý.</p>
+                <p className="text-gray-500 mb-6 text-sm max-w-sm mx-auto">Vui lòng bấm Thêm thẻ mới ở góc trên bên phải để bắt đầu thiết lập thông tin. Dữ liệu sẽ lập tiếp được đồng bộ trực tiếp lên Firebase Cloud của bạn.</p>
                 <button onClick={handleOpenAddCard} className="bg-indigo-600 text-white px-5 py-2 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-sm">
                   + Tạo thẻ đầu tiên
                 </button>
@@ -706,9 +608,9 @@
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {cards.map(card => (
-                  <div key={card.id} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex flex-col hover:shadow-md transition-shadow">
+                  <div key={card.id} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex flex-col hover:shadow-md transition-shadow relative">
                     
-                    {/* Minh họa thẻ */}
+                    {/* Minh họa thẻ tín dụng */}
                     <div 
                       className={`w-full h-44 rounded-2xl p-5 flex flex-col justify-between text-white shadow-md relative overflow-hidden mb-5 ${card.theme}`}
                       style={card.imageUrl ? { backgroundImage: `url(${card.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
@@ -728,7 +630,7 @@
                       </div>
                     </div>
 
-                    {/* Nội dung thông tin */}
+                    {/* Thông tin thẻ */}
                     <div className="flex-1 flex flex-col">
                       <div className="grid grid-cols-2 gap-3 mb-4">
                         <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
@@ -745,13 +647,13 @@
                         </div>
                       </div>
 
-                      {/* Trạng thái thanh toán */}
+                      {/* Trạng thái thẻ */}
                       <div className="mb-5 flex-1">
                         {card.isPaid ? (
                           <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3 flex items-start gap-3 text-emerald-800">
                             <IconCheckCircle className="mt-0.5 flex-shrink-0 text-emerald-600" size={18} />
                             <div>
-                              <p className="font-bold text-xs uppercase tracking-wider">Đã thanh toán xong</p>
+                              <p className="font-bold text-xs uppercase tracking-wider">Đã hoàn tất thanh toán</p>
                               <p className="text-[11px] text-emerald-600 mt-0.5">Ngày thực tế: {card.actualPaymentDate ? new Date(card.actualPaymentDate).toLocaleDateString('vi-VN') : 'N/A'}</p>
                             </div>
                           </div>
@@ -761,20 +663,20 @@
                               <IconAlertCircle className="mt-0.5 flex-shrink-0 text-orange-600" size={18} />
                               <div>
                                 <p className="font-bold text-xs uppercase tracking-wider">Chưa thanh toán</p>
-                                <p className="text-[11px] text-orange-600 mt-0.5">Hạn chót: ngày {card.dueDay}</p>
+                                <p className="text-[11px] text-orange-600 mt-0.5">Vui lòng trả trước ngày {card.dueDay}</p>
                               </div>
                             </div>
                             {card.reminderDate && card.reminderTime && (
                               <div className="flex items-center gap-1.5 text-[11px] bg-orange-100 px-2 py-1 rounded-md mt-1 w-fit font-semibold text-orange-900">
-                                <IconBell size={12} className="text-orange-600 animate-pulse" />
-                                Hẹn giờ: {card.reminderTime} - {new Date(card.reminderDate).toLocaleDateString('vi-VN')}
+                                <IconBell size={12} className={`text-orange-600 ${!card.reminderSent ? 'animate-pulse' : ''}`} />
+                                {card.reminderSent ? 'Đã báo:' : 'Báo thức:'} {card.reminderTime} - {new Date(card.reminderDate).toLocaleDateString('vi-VN')}
                               </div>
                             )}
                           </div>
                         )}
                       </div>
 
-                      {/* Các nút sự kiện */}
+                      {/* Nút hành động */}
                       <div className="flex gap-2 mt-auto">
                         {!card.isPaid ? (
                           <button 
@@ -786,7 +688,7 @@
                         ) : (
                           <button 
                             onClick={() => handleOpenStatement(card)}
-                            className="flex-1 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 py-2.5 rounded-xl text-xs font-bold transition-colors"
+                            className="flex-1 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 py-2.5 rounded-xl text-xs font-bold transition-colors shadow-sm"
                           >
                             Kỳ sao kê mới
                           </button>
@@ -817,99 +719,9 @@
             )}
           </main>
 
-          {/* --- CÁC POPUP MODALS --- */}
+          {/* --- CÁC MODALS POPUP --- */}
 
-          {/* 1. Modal Cloud Đồng Bộ Drive */}
-          <Modal 
-            isOpen={isCloudModalOpen} 
-            onClose={() => setIsCloudModalOpen(false)} 
-            title="Đồng Bộ Google Drive"
-          >
-            <div className="space-y-4">
-              <div className="p-3.5 bg-indigo-50 border border-indigo-100 rounded-xl">
-                <p className="text-xs text-indigo-900 font-semibold mb-1">Trạng thái: {cloudStatus}</p>
-                {googleUserEmail && <p className="text-xs text-gray-600 font-medium">Tài khoản: {googleUserEmail}</p>}
-              </div>
-
-              {!googleAccessToken ? (
-                <div className="space-y-3">
-                  <p className="text-[11px] text-gray-500 leading-relaxed">
-                    Dữ liệu sẽ được lưu tự động thành file riêng tư trên Drive của bạn. Để bắt đầu, nhập <b>Google Client ID</b> và <b>API Key</b> thiết lập trên Google Console của tên miền này:
-                  </p>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Google Client ID</label>
-                    <input 
-                      type="text"
-                      className="w-full p-2.5 border border-gray-300 rounded-lg text-xs"
-                      placeholder="xxxxxxxx.apps.googleusercontent.com"
-                      value={googleConfig.clientId}
-                      onChange={e => setGoogleConfig({ ...googleConfig, clientId: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Google Developer API Key</label>
-                    <input 
-                      type="password"
-                      className="w-full p-2.5 border border-gray-300 rounded-lg text-xs"
-                      placeholder="AIzaSy..."
-                      value={googleConfig.apiKey}
-                      onChange={e => setGoogleConfig({ ...googleConfig, apiKey: e.target.value })}
-                    />
-                  </div>
-                  
-                  {googleConfig.clientId && googleConfig.apiKey && (
-                    <button 
-                      onClick={handleGoogleSignIn}
-                      className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-lg text-xs hover:bg-indigo-700 transition-colors"
-                    >
-                      Kết nối tài khoản Google
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3 pt-2">
-                  <button 
-                    onClick={backupToDrive}
-                    disabled={isCloudLoading}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl text-xs transition-colors flex flex-col items-center gap-1"
-                  >
-                    <span>{isCloudLoading ? 'Đang thực hiện...' : 'Lưu lên Cloud'}</span>
-                    <span className="text-[10px] font-normal opacity-85">(Sao lưu)</span>
-                  </button>
-
-                  <button 
-                    onClick={restoreFromDrive}
-                    disabled={isCloudLoading}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl text-xs transition-colors flex flex-col items-center gap-1"
-                  >
-                    <span>{isCloudLoading ? 'Đang thực hiện...' : 'Khôi phục từ Cloud'}</span>
-                    <span className="text-[10px] font-normal opacity-85">(Tải xuống)</span>
-                  </button>
-
-                  <button 
-                    onClick={handleGoogleSignOut}
-                    className="col-span-2 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 rounded-xl text-xs transition-colors"
-                  >
-                    Đăng xuất Google Drive
-                  </button>
-                </div>
-              )}
-
-              <div className="border-t pt-4 mt-2">
-                <p className="text-[10px] text-gray-400 font-semibold mb-1">HƯỚNG DẪN LẤY API KEY / CLIENT ID:</p>
-                <ol className="list-decimal list-inside text-[10px] text-gray-500 space-y-1.5 leading-relaxed">
-                  <li>Vào <b>Google Cloud Console</b>.</li>
-                  <li>Tạo một Project mới bất kỳ.</li>
-                  <li>Cấu hình <b>OAuth Consent Screen</b> (External) & chọn Scope: <code className="bg-gray-100 p-0.5 rounded">.../auth/drive.file</code>.</li>
-                  <li>Vào <b>Credentials</b> -> Tạo <b>OAuth Client ID</b> (Chọn kiểu Web Application).</li>
-                  <li>Thêm domain hosting của bạn vào mục <b>Authorized JavaScript origins</b> (Ví dụ: <code className="bg-gray-100 p-0.5 rounded">https://mydomain.com</code>).</li>
-                  <li>Tạo tiếp <b>API Key</b> và copy dán vào form trên.</li>
-                </ol>
-              </div>
-            </div>
-          </Modal>
-
-          {/* 2. Modal Thêm/Sửa Thẻ */}
+          {/* 1. Modal Thêm/Sửa Thẻ */}
           <Modal 
             isOpen={isCardModalOpen} 
             onClose={() => setIsCardModalOpen(false)} 
@@ -948,7 +760,7 @@
                       <button
                         key={theme.id}
                         type="button"
-                        className={`w-8 h-8 rounded-full ${theme.class} ${cardForm.theme === theme.class ? 'ring-2 ring-offset-2 ring-indigo-600' : 'opacity-75 hover:opacity-100'}`}
+                        className={`w-8 h-8 rounded-full shadow-sm ${theme.class} ${cardForm.theme === theme.class ? 'ring-[3px] ring-offset-2 ring-indigo-600' : 'opacity-75 hover:opacity-100'}`}
                         onClick={() => setCardForm({...cardForm, theme: theme.class})}
                       />
                     ))}
@@ -956,7 +768,7 @@
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-3">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Ngày sao kê (1 - 31)</label>
                   <input 
@@ -981,149 +793,100 @@
                 </div>
               </div>
 
-              {/* Hộp cài đặt báo thức */}
-              <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 mt-3">
-                <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-900 mb-3">
-                  <IconBell size={14} className="text-indigo-600" /> Cài đặt chuông báo thanh toán
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Ngày nhắc nhở</label>
-                    <input 
-                      type="date"
-                      className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
-                      value={cardForm.reminderDate}
-                      onChange={e => setCardForm({...cardForm, reminderDate: e.target.value, reminderSent: false})}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Giờ nhắc nhở</label>
-                    <input 
-                      type="time"
-                      className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
-                      value={cardForm.reminderTime}
-                      onChange={e => setCardForm({...cardForm, reminderTime: e.target.value, reminderSent: false})}
-                    />
-                  </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Ngày nhắc nhở (Tùy chọn)</label>
+                  <input 
+                    type="date"
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm text-gray-700"
+                    value={cardForm.reminderDate}
+                    onChange={e => setCardForm({...cardForm, reminderDate: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Giờ nhắc nhở</label>
+                  <input 
+                    type="time"
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm text-gray-700"
+                    value={cardForm.reminderTime}
+                    onChange={e => setCardForm({...cardForm, reminderTime: e.target.value})}
+                  />
                 </div>
               </div>
 
-              <div className="pt-4 border-t mt-6 flex justify-end gap-2.5">
-                <button 
-                  type="button" 
-                  onClick={() => setIsCardModalOpen(false)}
-                  className="px-4 py-2 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold"
-                >
-                  Hủy bỏ
-                </button>
-                <button 
-                  type="submit"
-                  className="px-4 py-2 text-xs text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold"
-                >
-                  Lưu thông tin
-                </button>
-              </div>
+              <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl mt-4 transition-colors flex items-center justify-center gap-2">
+                <IconCloudSync size={18} />
+                {editingCard ? "Cập nhật dữ liệu Cloud" : "Lưu thẻ lên Cloud"}
+              </button>
             </form>
           </Modal>
 
-          {/* 3. Modal Ghi Nhận Thanh Toán */}
-          <Modal 
-            isOpen={isPaymentModalOpen} 
-            onClose={() => setIsPaymentModalOpen(false)} 
-            title="Thanh toán nợ thẻ"
+          {/* 2. Modal Xác nhận thanh toán */}
+          <Modal
+            isOpen={isPaymentModalOpen}
+            onClose={() => setIsPaymentModalOpen(false)}
+            title="Xác nhận thanh toán"
           >
-            {selectedCard && (
-              <form onSubmit={handleConfirmPayment} className="space-y-4">
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Thẻ giao dịch</p>
-                  <p className="font-bold text-gray-900 text-sm">{selectedCard.name}</p>
-                  <div className="mt-2.5">
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Số tiền nợ thực tế</p>
-                    <p className="text-xl font-extrabold text-indigo-700">{formatCurrency(selectedCard.amountDue)}</p>
-                  </div>
-                </div>
+            <form onSubmit={handleConfirmPayment} className="space-y-4">
+              <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl mb-4 text-sm text-blue-800">
+                Bạn đang xác nhận đã thanh toán toàn bộ dư nợ cho thẻ: <br/> 
+                <strong className="text-blue-900 text-base">{selectedCard?.name}</strong>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Ngày bạn đã thanh toán</label>
+                <input 
+                  required
+                  type="date"
+                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                  value={paymentDate}
+                  onChange={e => setPaymentDate(e.target.value)}
+                />
+              </div>
 
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Ngày thanh toán thực tế</label>
-                  <input 
-                    required
-                    type="date" 
-                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-gray-900"
-                    value={paymentDate}
-                    onChange={e => setPaymentDate(e.target.value)}
-                  />
-                </div>
-
-                <div className="pt-2 flex justify-end gap-2">
-                  <button 
-                    type="button" 
-                    onClick={() => setIsPaymentModalOpen(false)}
-                    className="px-4 py-2 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold"
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button 
-                    type="submit"
-                    className="px-4 py-2 text-xs text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg font-bold flex items-center gap-1"
-                  >
-                    <IconCheckCircle size={14} /> Xác nhận đã thanh toán
-                  </button>
-                </div>
-              </form>
-            )}
+              <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl mt-4 transition-colors">
+                Hoàn tất & Cập nhật
+              </button>
+            </form>
           </Modal>
 
-          {/* 4. Modal Nhập Sao Kê Kỳ Mới */}
-          <Modal 
-            isOpen={isStatementModalOpen} 
-            onClose={() => setIsStatementModalOpen(false)} 
-            title="Kỳ sao kê mới"
+          {/* 3. Modal Khởi tạo kỳ sao kê mới */}
+          <Modal
+            isOpen={isStatementModalOpen}
+            onClose={() => setIsStatementModalOpen(false)}
+            title="Bắt đầu kỳ sao kê mới"
           >
-            {selectedCard && (
-              <form onSubmit={handleConfirmStatement} className="space-y-4">
-                <p className="text-gray-500 text-xs leading-relaxed">
-                  Nhập số tiền phát sinh mới cho thẻ <strong>{selectedCard.name}</strong>. Kỳ cũ sẽ được đóng lại, chuyển trạng thái thẻ về "Chưa thanh toán" và xóa báo thức cũ.
-                </p>
-                
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Dư nợ sao kê mới (VNĐ)</label>
-                  <input 
-                    required
-                    type="number" 
-                    min="0"
-                    placeholder="VD: 12000000"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-lg font-extrabold text-gray-900"
-                    value={newStatementAmount}
-                    onChange={e => setNewStatementAmount(e.target.value)}
-                  />
-                </div>
+            <form onSubmit={handleConfirmStatement} className="space-y-4">
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl mb-4 text-sm text-gray-700">
+                Nhập số tiền dư nợ mới cho thẻ: <br/> 
+                <strong className="text-gray-900 text-base">{selectedCard?.name}</strong>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Dư nợ sao kê kỳ này (VNĐ)</label>
+                <input 
+                  required
+                  type="number"
+                  min="0"
+                  placeholder="VD: 5000000"
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-lg font-bold text-gray-900"
+                  value={newStatementAmount}
+                  onChange={e => setNewStatementAmount(e.target.value)}
+                />
+              </div>
 
-                <div className="pt-4 border-t flex justify-end gap-2">
-                  <button 
-                    type="button" 
-                    onClick={() => setIsStatementModalOpen(false)}
-                    className="px-4 py-2 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold"
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button 
-                    type="submit"
-                    className="px-4 py-2 text-xs text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold"
-                  >
-                    Xác nhận dư nợ mới
-                  </button>
-                </div>
-              </form>
-            )}
+              <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl mt-4 transition-colors">
+                Lưu kỳ mới
+              </button>
+            </form>
           </Modal>
 
         </div>
       );
     }
 
-    // Gắn kết ứng dụng React lên DOM
-    const rootElement = document.getElementById('root');
-    const root = ReactDOM.createRoot(rootElement);
+    // Khởi chạy ứng dụng React
+    const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
 </body>
