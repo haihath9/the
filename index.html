@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CreditTracker Pro - Quản Lý Thẻ Tín Dụng Cá Nhân</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Babel CDN để biên dịch JSX trực tiếp trên trình duyệt -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Google Fonts - Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+  <div id="root"></div>
+
+  <!-- Kịch bản React viết dưới dạng Babel JSX -->
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // --- INLINE SVG ICONS (Thay thế Lucide-React để tối ưu hóa Shared Hosting) ---
+    const IconCreditCard = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <rect x="2" y="5" width="20" height="14" rx="2" ry="2" />
+        <line x1="2" y1="10" x2="22" y2="10" />
+      </svg>
+    );
+
+    const IconPlus = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+    );
+
+    const IconCalendar = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </svg>
+    );
+
+    const IconCheckCircle = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+        <polyline points="22 4 12 14.01 9 11.01" />
+      </svg>
+    );
+
+    const IconAlertCircle = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+    );
+
+    const IconWallet = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4" />
+        <path d="M4 6v12c0 1.1.9 2 2 2h14v-4" />
+        <path d="M18 12a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h4v-6Z" />
+      </svg>
+    );
+
+    const IconEdit = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+        <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z" />
+      </svg>
+    );
+
+    const IconTrash = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        <line x1="10" y1="11" x2="10" y2="17" />
+        <line x1="14" y1="11" x2="14" y2="17" />
+      </svg>
+    );
+
+    const IconX = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    );
+
+    const IconBell = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
+    );
+
+    const IconVolume = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+      </svg>
+    );
+
+    const IconVolumeX = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+        <line x1="23" y1="9" x2="17" y2="15" />
+        <line x1="17" y1="9" x2="23" y2="15" />
+      </svg>
+    );
+
+    // --- CONFIGS & STYLES ---
+    const formatCurrency = (amount) => {
+      return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+    };
+
+    const THEMES = [
+      { id: 'dark', class: 'bg-gradient-to-br from-gray-900 to-gray-700' },
+      { id: 'blue', class: 'bg-gradient-to-br from-blue-700 to-blue-500' },
+      { id: 'purple', class: 'bg-gradient-to-br from-purple-700 to-pink-500' },
+      { id: 'gold', class: 'bg-gradient-to-br from-yellow-600 to-yellow-400' },
+      { id: 'green', class: 'bg-gradient-to-br from-emerald-600 to-teal-500' },
+      { id: 'red', class: 'bg-gradient-to-br from-red-700 to-rose-500' },
+    ];
+
+    const INITIAL_CARDS = [
+      {
+        id: '1',
+        name: 'Vietcombank Signature',
+        imageUrl: '',
+        theme: 'bg-gradient-to-br from-gray-900 to-gray-700',
+        statementDay: 20,
+        dueDay: 5,
+        amountDue: 15500000,
+        isPaid: false,
+        actualPaymentDate: null,
+        reminderDate: '',
+        reminderTime: '',
+        reminderSent: false
+      },
+      {
+        id: '2',
+        name: 'VIB Super Card',
+        imageUrl: '',
+        theme: 'bg-gradient-to-br from-blue-700 to-blue-500',
+        statementDay: 10,
+        dueDay: 25,
+        amountDue: 4200000,
+        isPaid: true,
+        actualPaymentDate: '2026-05-20',
+        reminderDate: '',
+        reminderTime: '',
+        reminderSent: false
+      }
+    ];
+
+    // --- SOUND NOTIFICATION ---
+    const playNotificationSound = () => {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        
+        // Tiếng bíp thứ nhất (D5)
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, ctx.currentTime);
+        gain1.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+        osc1.start(ctx.currentTime);
+        osc1.stop(ctx.currentTime + 0.15);
+
+        // Tiếng bíp thứ hai (A5)
+        setTimeout(() => {
+          const osc2 = ctx.createOscillator();
+          const gain2 = ctx.createGain();
+          osc2.connect(gain2);
+          gain2.connect(ctx.destination);
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(880, ctx.currentTime);
+          gain2.gain.setValueAtTime(0.08, ctx.currentTime);
+          gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+          osc2.start(ctx.currentTime);
+          osc2.stop(ctx.currentTime + 0.25);
+        }, 150);
+
+      } catch (e) {
+        console.warn("Không thể kích hoạt âm báo tự động:", e);
+      }
+    };
+
+    // --- REUSABLE MODAL COMPONENT ---
+    const Modal = ({ isOpen, onClose, title, children }) => {
+      if (!isOpen) return null;
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-opacity">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center p-5 border-b border-gray-100">
+              <h3 className="text-xl font-bold text-gray-800">{title}</h3>
+              <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 transition-colors">
+                <IconX size={20} />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto">
+              {children}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // --- MAIN APP COMPONENT ---
+    function App() {
+      const [cards, setCards] = useState(() => {
+        const savedCards = localStorage.getItem('credittracker_cards');
+        return savedCards ? JSON.parse(savedCards) : INITIAL_CARDS;
+      });
+      
+      const [notifications, setNotifications] = useState([]);
+      const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+      
+      // Modal States
+      const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+      const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+      const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
+      
+      // Active Selection States
+      const [editingCard, setEditingCard] = useState(null);
+      const [selectedCard, setSelectedCard] = useState(null);
+      const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+      const [newStatementAmount, setNewStatementAmount] = useState('');
+      
+      // Form Input State
+      const [cardForm, setCardForm] = useState({
+        name: '', imageUrl: '', theme: THEMES[0].class, statementDay: '', dueDay: '', reminderDate: '', reminderTime: ''
+      });
+
+      // Tự động đồng bộ dữ liệu vào LocalStorage trên Hosting
+      useEffect(() => {
+        localStorage.setItem('credittracker_cards', JSON.stringify(cards));
+      }, [cards]);
+
+      // Trình ngầm kiểm tra báo thức và giờ hẹn thanh toán
+      useEffect(() => {
+        const checkReminders = () => {
+          const now = new Date();
+          const currentDate = now.toISOString().split('T')[0];
+          const currentHour = now.getHours().toString().padStart(2, '0');
+          const currentMinute = now.getMinutes().toString().padStart(2, '0');
+          const currentTime = `${currentHour}:${currentMinute}`;
+
+          let isUpdated = false;
+          const updatedCards = cards.map(card => {
+            if (
+              !card.isPaid &&
+              card.reminderDate === currentDate &&
+              card.reminderTime === currentTime &&
+              !card.reminderSent
+            ) {
+              if (isSoundEnabled) {
+                playNotificationSound();
+              }
+
+              // Đưa thông báo lên màn hình
+              setNotifications(prev => [
+                ...prev,
+                {
+                  id: Date.now().toString() + Math.random(),
+                  cardName: card.name,
+                  amount: card.amountDue,
+                  message: `Đến giờ thanh toán thẻ ${card.name}!`
+                }
+              ]);
+              
+              isUpdated = true;
+              return { ...card, reminderSent: true };
+            }
+            return card;
+          });
+
+          if (isUpdated) {
+            setCards(updatedCards);
+          }
+        };
+
+        const intervalId = setInterval(checkReminders, 10000); // 10 giây quét 1 lần
+        return () => clearInterval(intervalId);
+      }, [cards, isSoundEnabled]);
+
+      // Tính toán dữ liệu thống kê tổng thể
+      const totalDue = cards.filter(c => !c.isPaid).reduce((sum, c) => sum + Number(c.amountDue || 0), 0);
+      const totalPaid = cards.filter(c => c.isPaid).reduce((sum, c) => sum + Number(c.amountDue || 0), 0);
+
+      // --- EVENT HANDLERS ---
+      const handleOpenAddCard = () => {
+        setEditingCard(null);
+        setCardForm({ name: '', imageUrl: '', theme: THEMES[0].class, statementDay: '', dueDay: '', reminderDate: '', reminderTime: '' });
+        setIsCardModalOpen(true);
+      };
+
+      const handleOpenEditCard = (card) => {
+        setEditingCard(card);
+        setCardForm({ ...card });
+        setIsCardModalOpen(true);
+      };
+
+      const handleSaveCard = (e) => {
+        e.preventDefault();
+        if (editingCard) {
+          setCards(cards.map(c => c.id === editingCard.id ? { ...c, ...cardForm } : c));
+        } else {
+          const newCard = {
+            ...cardForm,
+            id: Date.now().toString(),
+            amountDue: 0,
+            isPaid: false,
+            actualPaymentDate: null,
+            reminderSent: false
+          };
+          setCards([...cards, newCard]);
+        }
+        setIsCardModalOpen(false);
+      };
+
+      const handleDeleteCard = (id) => {
+        if (window.confirm('Bạn có thực sự muốn xóa thẻ này? Mọi lịch sử lưu trữ của thẻ sẽ mất.')) {
+          setCards(cards.filter(c => c.id !== id));
+        }
+      };
+
+      const handleOpenPayment = (card) => {
+        setSelectedCard(card);
+        setPaymentDate(new Date().toISOString().split('T')[0]);
+        setIsPaymentModalOpen(true);
+      };
+
+      const handleConfirmPayment = (e) => {
+        e.preventDefault();
+        setCards(cards.map(c => 
+          c.id === selectedCard.id 
+            ? { ...c, isPaid: true, actualPaymentDate: paymentDate } 
+            : c
+        ));
+        setIsPaymentModalOpen(false);
+      };
+
+      const handleOpenStatement = (card) => {
+        setSelectedCard(card);
+        setNewStatementAmount(card.amountDue || '');
+        setIsStatementModalOpen(true);
+      };
+
+      const handleConfirmStatement = (e) => {
+        e.preventDefault();
+        setCards(cards.map(c => 
+          c.id === selectedCard.id 
+            ? { 
+                ...c, 
+                amountDue: Number(newStatementAmount), 
+                isPaid: false, 
+                actualPaymentDate: null, 
+                reminderSent: false 
+              } 
+            : c
+        ));
+        setIsStatementModalOpen(false);
+      };
+
+      const removeNotification = (id) => {
+        setNotifications(notifications.filter(n => n.id !== id));
+      };
+
+      return (
+        <div className="min-h-screen bg-gray-50 text-gray-800 font-sans relative">
+          
+          {/* Hệ thống Toast Alerts góc phải */}
+          <div className="fixed top-20 right-4 z-50 flex flex-col gap-3 pointer-events-none max-w-sm w-full px-4 sm:px-0">
+            {notifications.map(note => (
+              <div 
+                key={note.id} 
+                className="bg-white border-l-4 border-indigo-600 shadow-2xl rounded-r-xl p-4 w-full pointer-events-auto relative border border-gray-100 flex flex-col"
+              >
+                <button 
+                  onClick={() => removeNotification(note.id)} 
+                  className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <IconX size={16} />
+                </button>
+                <div className="flex items-center gap-2 text-indigo-600 font-bold mb-1">
+                  <IconBell size={18} className="animate-bounce" />
+                  <span>BÁO THỨC THANH TOÁN!</span>
+                </div>
+                <p className="text-sm text-gray-600 mt-1">{note.message}</p>
+                <p className="text-sm font-bold text-gray-950 mt-2">Cần trả: {formatCurrency(note.amount)}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Header */}
+          <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+            <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-indigo-600">
+                <IconCreditCard size={28} className="text-indigo-600" />
+                <h1 className="text-xl font-extrabold tracking-tight">CreditTracker Pro</h1>
+              </div>
+              
+              <div className="flex items-center gap-2.5">
+                {/* Bật/Tắt âm thanh báo */}
+                <button 
+                  onClick={() => setIsSoundEnabled(!isSoundEnabled)}
+                  className={`p-2 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-semibold ${isSoundEnabled ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'}`}
+                >
+                  {isSoundEnabled ? <IconVolume size={16} /> : <IconVolumeX size={16} />}
+                  <span className="hidden sm:inline">{isSoundEnabled ? "Đang bật âm" : "Đã tắt âm"}</span>
+                </button>
+
+                <button 
+                  onClick={handleOpenAddCard}
+                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold transition-colors shadow-sm text-sm"
+                >
+                  <IconPlus size={16} />
+                  <span>Thêm thẻ mới</span>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <main className="max-w-6xl mx-auto px-4 py-8">
+            
+            {/* Widget Tổng Quan */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex items-center gap-5">
+                <div className="w-14 h-14 rounded-full bg-rose-50 flex items-center justify-center text-rose-600 flex-shrink-0 border border-rose-100">
+                  <IconAlertCircle size={28} />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1">Dư nợ chưa thanh toán</p>
+                  <h2 className="text-3xl font-extrabold text-gray-900">{formatCurrency(totalDue)}</h2>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex items-center gap-5">
+                <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 flex-shrink-0 border border-emerald-100">
+                  <IconCheckCircle size={28} />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1">Đã thanh toán kỳ này</p>
+                  <h2 className="text-3xl font-extrabold text-gray-900">{formatCurrency(totalPaid)}</h2>
+                </div>
+              </div>
+            </div>
+
+            {/* Tiêu đề danh sách */}
+            <div className="mb-6 flex justify-between items-center">
+              <h2 className="text-lg font-bold text-gray-800">Danh sách thẻ tín dụng</h2>
+              <span className="text-[11px] text-gray-500 bg-gray-100 px-3 py-1 rounded-full font-medium">Bảo mật: Dữ liệu lưu cục bộ trên máy</span>
+            </div>
+
+            {/* Danh sách thẻ */}
+            {cards.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300">
+                <IconCreditCard size={48} className="mx-auto text-gray-300 mb-4" />
+                <h3 className="text-lg font-bold text-gray-900 mb-1">Chưa có thẻ nào</h3>
+                <p className="text-gray-500 mb-6 text-sm max-w-sm mx-auto">Vui lòng bấm Thêm thẻ mới ở góc trên bên phải để bắt đầu thiết lập thông tin.</p>
+                <button onClick={handleOpenAddCard} className="bg-indigo-600 text-white px-5 py-2 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-sm">
+                  + Tạo thẻ đầu tiên
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {cards.map(card => (
+                  <div key={card.id} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex flex-col hover:shadow-md transition-shadow">
+                    
+                    {/* Minh họa thẻ tín dụng */}
+                    <div 
+                      className={`w-full h-44 rounded-2xl p-5 flex flex-col justify-between text-white shadow-md relative overflow-hidden mb-5 ${card.theme}`}
+                      style={card.imageUrl ? { backgroundImage: `url(${card.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
+                    >
+                      {card.imageUrl && <div className="absolute inset-0 bg-black/40 z-0"></div>}
+                      
+                      <div className="relative z-10 flex justify-between items-start">
+                        <span className="font-bold text-lg tracking-wide line-clamp-1">{card.name}</span>
+                        <IconWallet className="opacity-80" size={20} />
+                      </div>
+                      
+                      <div className="relative z-10">
+                        <div className="text-white/75 text-[10px] uppercase tracking-wider mb-0.5 font-semibold">Dư nợ sao kê kỳ này</div>
+                        <div className="text-2xl font-extrabold tracking-tight">
+                          {formatCurrency(card.amountDue || 0)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Thông tin thẻ */}
+                    <div className="flex-1 flex flex-col">
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                          <div className="text-[11px] text-gray-400 font-semibold flex items-center gap-1 mb-1">
+                            <IconCalendar size={13} /> Ngày sao kê
+                          </div>
+                          <div className="font-bold text-gray-900 text-sm">Hàng tháng {card.statementDay}</div>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                          <div className="text-[11px] text-gray-400 font-semibold flex items-center gap-1 mb-1">
+                            <IconAlertCircle size={13} className={card.isPaid ? 'text-gray-400' : 'text-orange-500'}/> Ngày đến hạn
+                          </div>
+                          <div className="font-bold text-gray-900 text-sm">Hàng tháng {card.dueDay}</div>
+                        </div>
+                      </div>
+
+                      {/* Trạng thái thẻ */}
+                      <div className="mb-5 flex-1">
+                        {card.isPaid ? (
+                          <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3 flex items-start gap-3 text-emerald-800">
+                            <IconCheckCircle className="mt-0.5 flex-shrink-0 text-emerald-600" size={18} />
+                            <div>
+                              <p className="font-bold text-xs uppercase tracking-wider">Đã hoàn tất thanh toán</p>
+                              <p className="text-[11px] text-emerald-600 mt-0.5">Ngày thực tế: {card.actualPaymentDate ? new Date(card.actualPaymentDate).toLocaleDateString('vi-VN') : 'N/A'}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-orange-50/60 border border-orange-100 rounded-xl p-3 flex flex-col gap-2 text-orange-800">
+                            <div className="flex items-start gap-3">
+                              <IconAlertCircle className="mt-0.5 flex-shrink-0 text-orange-600" size={18} />
+                              <div>
+                                <p className="font-bold text-xs uppercase tracking-wider">Chưa thanh toán</p>
+                                <p className="text-[11px] text-orange-600 mt-0.5">Vui lòng trả trước ngày {card.dueDay}</p>
+                              </div>
+                            </div>
+                            {card.reminderDate && card.reminderTime && (
+                              <div className="flex items-center gap-1.5 text-[11px] bg-orange-100 px-2 py-1 rounded-md mt-1 w-fit font-semibold text-orange-900">
+                                <IconBell size={12} className="text-orange-600 animate-pulse" />
+                                Báo thức lúc: {card.reminderTime} - {new Date(card.reminderDate).toLocaleDateString('vi-VN')}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Nút hành động */}
+                      <div className="flex gap-2 mt-auto">
+                        {!card.isPaid ? (
+                          <button 
+                            onClick={() => handleOpenPayment(card)}
+                            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-xs font-bold transition-colors shadow-sm"
+                          >
+                            Xác nhận đã trả
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => handleOpenStatement(card)}
+                            className="flex-1 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 py-2.5 rounded-xl text-xs font-bold transition-colors"
+                          >
+                            Kỳ sao kê mới
+                          </button>
+                        )}
+                        
+                        <div className="flex gap-1.5">
+                          <button 
+                            onClick={() => handleOpenEditCard(card)}
+                            className="p-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-colors"
+                            title="Chỉnh sửa thẻ"
+                          >
+                            <IconEdit size={16} />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteCard(card.id)}
+                            className="p-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-colors"
+                            title="Xóa thẻ"
+                          >
+                            <IconTrash size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                ))}
+              </div>
+            )}
+          </main>
+
+          {/* --- CÁC MODALS POPUP --- */}
+
+          {/* 1. Modal Thêm/Sửa Thẻ */}
+          <Modal 
+            isOpen={isCardModalOpen} 
+            onClose={() => setIsCardModalOpen(false)} 
+            title={editingCard ? "Chỉnh sửa thẻ" : "Thêm thẻ tín dụng"}
+          >
+            <form onSubmit={handleSaveCard} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Tên thẻ tín dụng</label>
+                <input 
+                  required
+                  type="text" 
+                  placeholder="VD: VPBank StepUp, Techcombank Visa..."
+                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium"
+                  value={cardForm.name}
+                  onChange={e => setCardForm({...cardForm, name: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Đường dẫn ảnh thẻ (URL - Tùy chọn)</label>
+                <input 
+                  type="url" 
+                  placeholder="https://example.com/logo-card.jpg"
+                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                  value={cardForm.imageUrl}
+                  onChange={e => setCardForm({...cardForm, imageUrl: e.target.value})}
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Để trống nếu bạn muốn dùng mẫu nền gradient có sẵn dưới đây.</p>
+              </div>
+
+              {!cardForm.imageUrl && (
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Chọn mẫu màu thẻ</label>
+                  <div className="flex gap-2 flex-wrap">
+                    {THEMES.map(theme => (
+                      <button
+                        key={theme.id}
+                        type="button"
+                        className={`w-8 h-8 rounded-full ${theme.class} ${cardForm.theme === theme.class ? 'ring-2 ring-offset-2 ring-indigo-600' : 'opacity-75 hover:opacity-100'}`}
+                        onClick={() => setCardForm({...cardForm, theme: theme.class})}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Ngày sao kê (1 - 31)</label>
+                  <input 
+                    required
+                    type="number" min="1" max="31"
+                    placeholder="VD: 20"
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-gray-900"
+                    value={cardForm.statementDay}
+                    onChange={e => setCardForm({...cardForm, statementDay: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Ngày đến hạn (1 - 31)</label>
+                  <input 
+                    required
+                    type="number" min="1" max="31"
+                    placeholder="VD: 5"
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-gray-900"
+                    value={cardForm.dueDay}
+                    onChange={e => setCardForm({...cardForm, dueDay: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              {/* Hộp cài đặt báo thức */}
+              <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 mt-3">
+                <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-900 mb-3">
+                  <IconBell size={14} className="text-indigo-600" /> Cài đặt chuông báo thanh toán
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Ngày nhắc nhở</label>
+                    <input 
+                      type="date"
+                      className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
+                      value={cardForm.reminderDate}
+                      onChange={e => setCardForm({...cardForm, reminderDate: e.target.value, reminderSent: false})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Giờ nhắc nhở</label>
+                    <input 
+                      type="time"
+                      className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
+                      value={cardForm.reminderTime}
+                      onChange={e => setCardForm({...cardForm, reminderTime: e.target.value, reminderSent: false})}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t mt-6 flex justify-end gap-2.5">
+                <button 
+                  type="button" 
+                  onClick={() => setIsCardModalOpen(false)}
+                  className="px-4 py-2 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold transition-colors"
+                >
+                  Hủy bỏ
+                </button>
+                <button 
+                  type="submit"
+                  className="px-4 py-2 text-xs text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold transition-colors"
+                >
+                  Lưu thông tin
+                </button>
+              </div>
+            </form>
+          </Modal>
+
+          {/* 2. Modal Ghi Nhận Thanh Toán */}
+          <Modal 
+            isOpen={isPaymentModalOpen} 
+            onClose={() => setIsPaymentModalOpen(false)} 
+            title="Thanh toán nợ thẻ"
+          >
+            {selectedCard && (
+              <form onSubmit={handleConfirmPayment} className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Thẻ giao dịch</p>
+                  <p className="font-bold text-gray-900 text-sm">{selectedCard.name}</p>
+                  <div className="mt-2.5">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Số tiền nợ thực tế</p>
+                    <p className="text-xl font-extrabold text-indigo-700">{formatCurrency(selectedCard.amountDue)}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Ngày thanh toán thực tế</label>
+                  <input 
+                    required
+                    type="date" 
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-gray-900"
+                    value={paymentDate}
+                    onChange={e => setPaymentDate(e.target.value)}
+                  />
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsPaymentModalOpen(false)}
+                    className="px-4 py-2 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold transition-colors"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button 
+                    type="submit"
+                    className="px-4 py-2 text-xs text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg font-bold transition-colors flex items-center gap-1"
+                  >
+                    <IconCheckCircle size={14} /> Xác nhận đã thanh toán
+                  </button>
+                </div>
+              </form>
+            )}
+          </Modal>
+
+          {/* 3. Modal Nhập Sao Kê Kỳ Mới */}
+          <Modal 
+            isOpen={isStatementModalOpen} 
+            onClose={() => setIsStatementModalOpen(false)} 
+            title="Kỳ sao kê mới"
+          >
+            {selectedCard && (
+              <form onSubmit={handleConfirmStatement} className="space-y-4">
+                <p className="text-gray-500 text-xs leading-relaxed">
+                  Nhập số tiền phát sinh mới cho thẻ <strong>{selectedCard.name}</strong>. Kỳ cũ sẽ được đóng lại, chuyển trạng thái thẻ về "Chưa thanh toán" và xóa báo thức cũ.
+                </p>
+                
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Dư nợ sao kê mới (VNĐ)</label>
+                  <input 
+                    required
+                    type="number" 
+                    min="0"
+                    placeholder="VD: 12000000"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-lg font-extrabold text-gray-900"
+                    value={newStatementAmount}
+                    onChange={e => setNewStatementAmount(e.target.value)}
+                  />
+                </div>
+
+                <div className="pt-4 border-t flex justify-end gap-2">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsStatementModalOpen(false)}
+                    className="px-4 py-2 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button 
+                    type="submit"
+                    className="px-4 py-2 text-xs text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold"
+                  >
+                    Xác nhận dư nợ mới
+                  </button>
+                </div>
+              </form>
+            )}
+          </Modal>
+
+        </div>
+      );
+    }
+
+    // Gắn kết ứng dụng React lên DOM
+    const rootElement = document.getElementById('root');
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(<App />);
+  </script>
+</body>
+</html>
