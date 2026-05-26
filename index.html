@@ -15,6 +15,10 @@
   <!-- Babel CDN để biên dịch JSX trực tiếp trên trình duyệt -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
+  <!-- Google API Client & Google Identity Services (Cho tính năng đồng bộ Google Drive) -->
+  <script async defer src="https://apis.google.com/js/api.js"></script>
+  <script async defer src="https://accounts.google.com/gsi/client"></script>
+  
   <!-- Google Fonts - Inter -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   
@@ -30,7 +34,7 @@
 
   <!-- Kịch bản React viết dưới dạng Babel JSX -->
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     // --- INLINE SVG ICONS (Thay thế Lucide-React để tối ưu hóa Shared Hosting) ---
     const IconCreditCard = ({ size = 24, className = "" }) => (
@@ -125,6 +129,12 @@
       </svg>
     );
 
+    const IconCloud = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M17.5 19A3.5 3.5 0 0 0 21 15.5c0-2.79-2.54-4.5-5-4.5-.42-1.89-2-3-3.5-3A4 4 0 0 0 8.5 12c-2.42 0-4.5 1.72-4.5 4.5A3.5 3.5 0 0 0 7.5 19z" />
+      </svg>
+    );
+
     // --- CONFIGS & STYLES ---
     const formatCurrency = (amount) => {
       return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
@@ -177,7 +187,6 @@
         if (!AudioContext) return;
         const ctx = new AudioContext();
         
-        // Tiếng bíp thứ nhất (D5)
         const osc1 = ctx.createOscillator();
         const gain1 = ctx.createGain();
         osc1.connect(gain1);
@@ -189,7 +198,6 @@
         osc1.start(ctx.currentTime);
         osc1.stop(ctx.currentTime + 0.15);
 
-        // Tiếng bíp thứ hai (A5)
         setTimeout(() => {
           const osc2 = ctx.createOscillator();
           const gain2 = ctx.createGain();
@@ -202,7 +210,6 @@
           osc2.start(ctx.currentTime);
           osc2.stop(ctx.currentTime + 0.25);
         }, 150);
-
       } catch (e) {
         console.warn("Không thể kích hoạt âm báo tự động:", e);
       }
@@ -230,9 +237,16 @@
 
     // --- MAIN APP COMPONENT ---
     function App() {
+      // Tải dữ liệu thẻ
       const [cards, setCards] = useState(() => {
         const savedCards = localStorage.getItem('credittracker_cards');
         return savedCards ? JSON.parse(savedCards) : INITIAL_CARDS;
+      });
+
+      // Tải cấu hình API Google (Nếu có)
+      const [googleConfig, setGoogleConfig] = useState(() => {
+        const savedConfig = localStorage.getItem('credittracker_google_config');
+        return savedConfig ? JSON.parse(savedConfig) : { clientId: '', apiKey: '' };
       });
       
       const [notifications, setNotifications] = useState([]);
@@ -242,6 +256,7 @@
       const [isCardModalOpen, setIsCardModalOpen] = useState(false);
       const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
       const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
+      const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
       
       // Active Selection States
       const [editingCard, setEditingCard] = useState(null);
@@ -249,17 +264,29 @@
       const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
       const [newStatementAmount, setNewStatementAmount] = useState('');
       
+      // Google API State
+      const [googleAccessToken, setGoogleAccessToken] = useState(null);
+      const [googleUserEmail, setGoogleUserEmail] = useState(null);
+      const [cloudStatus, setCloudStatus] = useState('Chưa kết nối');
+      const [isCloudLoading, setIsCloudLoading] = useState(false);
+      const tokenClientRef = useRef(null);
+
       // Form Input State
       const [cardForm, setCardForm] = useState({
         name: '', imageUrl: '', theme: THEMES[0].class, statementDay: '', dueDay: '', reminderDate: '', reminderTime: ''
       });
 
-      // Tự động đồng bộ dữ liệu vào LocalStorage trên Hosting
+      // Lưu trữ cục bộ
       useEffect(() => {
         localStorage.setItem('credittracker_cards', JSON.stringify(cards));
       }, [cards]);
 
-      // Trình ngầm kiểm tra báo thức và giờ hẹn thanh toán
+      // Lưu cấu hình Google Drive Client ID / API Key
+      useEffect(() => {
+        localStorage.setItem('credittracker_google_config', JSON.stringify(googleConfig));
+      }, [googleConfig]);
+
+      // --- TRÌNH BÁO THỨC HẸN GIỜ ---
       useEffect(() => {
         const checkReminders = () => {
           const now = new Date();
@@ -280,7 +307,6 @@
                 playNotificationSound();
               }
 
-              // Đưa thông báo lên màn hình
               setNotifications(prev => [
                 ...prev,
                 {
@@ -302,11 +328,190 @@
           }
         };
 
-        const intervalId = setInterval(checkReminders, 10000); // 10 giây quét 1 lần
+        const intervalId = setInterval(checkReminders, 10000);
         return () => clearInterval(intervalId);
       }, [cards, isSoundEnabled]);
 
-      // Tính toán dữ liệu thống kê tổng thể
+      // --- TÍCH HỢP GOOGLE DRIVE SYNC ---
+      
+      // Khởi chạy Google client (GAPI & GIS)
+      useEffect(() => {
+        if (!googleConfig.clientId || !googleConfig.apiKey) return;
+
+        const initGapi = () => {
+          gapi.client.init({
+            apiKey: googleConfig.apiKey,
+            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+          }).then(() => {
+            setCloudStatus('Sẵn sàng kết nối');
+          }).catch(err => {
+            console.error("Lỗi khởi tạo GAPI:", err);
+            setCloudStatus('Lỗi cấu hình API Google');
+          });
+        };
+
+        const loadGapi = () => {
+          gapi.load('client', initGapi);
+        };
+
+        // Khởi tạo Identity Client Token
+        try {
+          tokenClientRef.current = google.accounts.oauth2.initTokenClient({
+            client_id: googleConfig.clientId,
+            scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email',
+            callback: (resp) => {
+              if (resp.error !== undefined) {
+                setCloudStatus('Lỗi xác thực Google');
+                return;
+              }
+              setGoogleAccessToken(resp.access_token);
+              setCloudStatus('Đã đăng nhập Google');
+              fetchUserProfile(resp.access_token);
+            },
+          });
+          loadGapi();
+        } catch (e) {
+          console.error("Lỗi khởi tạo GIS:", e);
+        }
+      }, [googleConfig.clientId, googleConfig.apiKey]);
+
+      const fetchUserProfile = (token) => {
+        fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.email) setGoogleUserEmail(data.email);
+        })
+        .catch(err => console.error("Không thể lấy thông tin User:", err));
+      };
+
+      const handleGoogleSignIn = () => {
+        if (!tokenClientRef.current) {
+          alert("Vui lòng điền thông tin Client ID và API Key trước!");
+          return;
+        }
+        tokenClientRef.current.requestAccessToken({ prompt: 'consent' });
+      };
+
+      const handleGoogleSignOut = () => {
+        if (googleAccessToken) {
+          google.accounts.oauth2.revoke(googleAccessToken);
+        }
+        setGoogleAccessToken(null);
+        setGoogleUserEmail(null);
+        setCloudStatus('Sẵn sàng kết nối');
+      };
+
+      // ĐỒNG BỘ: ĐẨY LÊN GOOGLE DRIVE (Sao lưu)
+      const backupToDrive = async () => {
+        if (!googleAccessToken) {
+          alert("Vui lòng đăng nhập Google Drive trước!");
+          return;
+        }
+        setIsCloudLoading(true);
+        setCloudStatus('Đang sao lưu...');
+
+        try {
+          // Tìm xem tệp đã tồn tại chưa
+          const listResponse = await gapi.client.drive.files.list({
+            q: "name = 'credittracker_backup.json' and trashed = false",
+            fields: 'files(id)',
+            spaces: 'drive'
+          });
+
+          const files = listResponse.result.files;
+          const fileContent = JSON.stringify({ cards, updatedAt: new Date().toISOString() });
+          const fileMetadata = { name: 'credittracker_backup.json', mimeType: 'application/json' };
+
+          if (files && files.length > 0) {
+            // Cập nhật tệp cũ đã tồn tại
+            const fileId = files[0].id;
+            await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${googleAccessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: fileContent
+            });
+          } else {
+            // Tạo mới tệp sao lưu trên Drive
+            const metadataResponse = await gapi.client.drive.files.create({
+              resource: fileMetadata,
+              fields: 'id'
+            });
+            const newFileId = metadataResponse.result.id;
+
+            await fetch(`https://www.googleapis.com/upload/drive/v3/files/${newFileId}?uploadType=media`, {
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${googleAccessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: fileContent
+            });
+          }
+
+          setCloudStatus('Sao lưu thành công!');
+          alert("Sao lưu dữ liệu lên Google Drive thành công!");
+        } catch (error) {
+          console.error("Lỗi đồng bộ sao lưu:", error);
+          setCloudStatus('Sao lưu thất bại');
+          alert("Sao lưu thất bại, vui lòng đăng nhập lại và thử lại.");
+        } finally {
+          setIsCloudLoading(false);
+        }
+      };
+
+      // ĐỒNG BỘ: TẢI VỀ TỪ GOOGLE DRIVE (Khôi phục)
+      const restoreFromDrive = async () => {
+        if (!googleAccessToken) {
+          alert("Vui lòng đăng nhập Google Drive trước!");
+          return;
+        }
+        setIsCloudLoading(true);
+        setCloudStatus('Đang tải dữ liệu...');
+
+        try {
+          const listResponse = await gapi.client.drive.files.list({
+            q: "name = 'credittracker_backup.json' and trashed = false",
+            fields: 'files(id)',
+            spaces: 'drive'
+          });
+
+          const files = listResponse.result.files;
+          if (files && files.length > 0) {
+            const fileId = files[0].id;
+            const contentResponse = await gapi.client.drive.files.get({
+              fileId: fileId,
+              alt: 'media'
+            });
+
+            const backupData = contentResponse.result;
+            if (backupData && backupData.cards) {
+              if (window.confirm(`Tìm thấy bản sao lưu trên Drive. Bạn có muốn khôi phục và ghi đè toàn bộ dữ liệu hiện tại trên thiết bị này?`)) {
+                setCards(backupData.cards);
+                setCloudStatus('Khôi phục thành công!');
+                alert("Khôi phục thành công! Trang sẽ cập nhật dữ liệu mới.");
+              }
+            } else {
+              alert("File sao lưu rỗng hoặc sai định dạng.");
+            }
+          } else {
+            alert("Không tìm thấy tệp sao lưu nào của ứng dụng trên Google Drive!");
+            setCloudStatus('Không có tệp sao lưu');
+          }
+        } catch (error) {
+          console.error("Lỗi khôi phục:", error);
+          setCloudStatus('Khôi phục thất bại');
+          alert("Không thể khôi phục dữ liệu từ đám mây.");
+        } finally {
+          setIsCloudLoading(false);
+        }
+      };
+
+      // Tính tổng tiền nợ và tiền đã thanh toán
       const totalDue = cards.filter(c => !c.isPaid).reduce((sum, c) => sum + Number(c.amountDue || 0), 0);
       const totalPaid = cards.filter(c => c.isPaid).reduce((sum, c) => sum + Number(c.amountDue || 0), 0);
 
@@ -342,7 +547,7 @@
       };
 
       const handleDeleteCard = (id) => {
-        if (window.confirm('Bạn có thực sự muốn xóa thẻ này? Mọi lịch sử lưu trữ của thẻ sẽ mất.')) {
+        if (window.confirm('Bạn có chắc muốn xóa thẻ này? Mọi dữ liệu sẽ mất.')) {
           setCards(cards.filter(c => c.id !== id));
         }
       };
@@ -392,7 +597,7 @@
       return (
         <div className="min-h-screen bg-gray-50 text-gray-800 font-sans relative">
           
-          {/* Hệ thống Toast Alerts góc phải */}
+          {/* Toast Alerts */}
           <div className="fixed top-20 right-4 z-50 flex flex-col gap-3 pointer-events-none max-w-sm w-full px-4 sm:px-0">
             {notifications.map(note => (
               <div 
@@ -423,22 +628,31 @@
                 <h1 className="text-xl font-extrabold tracking-tight">CreditTracker Pro</h1>
               </div>
               
-              <div className="flex items-center gap-2.5">
-                {/* Bật/Tắt âm thanh báo */}
+              <div className="flex items-center gap-2">
+                {/* Nút mây đồng bộ */}
+                <button 
+                  onClick={() => setIsCloudModalOpen(true)}
+                  className={`p-2 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-semibold ${googleAccessToken ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-gray-200'}`}
+                  title="Đồng bộ Google Drive"
+                >
+                  <IconCloud size={16} className={googleAccessToken ? 'animate-pulse text-emerald-600' : 'text-gray-500'} />
+                  <span className="hidden sm:inline">{googleAccessToken ? "Đồng bộ" : "Thiết lập Cloud"}</span>
+                </button>
+
+                {/* Bật/Tắt âm */}
                 <button 
                   onClick={() => setIsSoundEnabled(!isSoundEnabled)}
                   className={`p-2 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-semibold ${isSoundEnabled ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'}`}
                 >
                   {isSoundEnabled ? <IconVolume size={16} /> : <IconVolumeX size={16} />}
-                  <span className="hidden sm:inline">{isSoundEnabled ? "Đang bật âm" : "Đã tắt âm"}</span>
                 </button>
 
                 <button 
                   onClick={handleOpenAddCard}
-                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold transition-colors shadow-sm text-sm"
+                  className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-lg font-bold transition-colors shadow-sm text-sm"
                 >
                   <IconPlus size={16} />
-                  <span>Thêm thẻ mới</span>
+                  <span>Mới</span>
                 </button>
               </div>
             </div>
@@ -446,7 +660,7 @@
 
           <main className="max-w-6xl mx-auto px-4 py-8">
             
-            {/* Widget Tổng Quan */}
+            {/* Widget Thống kê */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex items-center gap-5">
                 <div className="w-14 h-14 rounded-full bg-rose-50 flex items-center justify-center text-rose-600 flex-shrink-0 border border-rose-100">
@@ -469,18 +683,22 @@
               </div>
             </div>
 
-            {/* Tiêu đề danh sách */}
+            {/* Danh sách thẻ */}
             <div className="mb-6 flex justify-between items-center">
-              <h2 className="text-lg font-bold text-gray-800">Danh sách thẻ tín dụng</h2>
-              <span className="text-[11px] text-gray-500 bg-gray-100 px-3 py-1 rounded-full font-medium">Bảo mật: Dữ liệu lưu cục bộ trên máy</span>
+              <h2 className="text-lg font-bold text-gray-800">Thẻ tín dụng của tôi</h2>
+              {googleUserEmail && (
+                <span className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-1 rounded-full font-medium flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Đã kết nối: {googleUserEmail}
+                </span>
+              )}
             </div>
 
-            {/* Danh sách thẻ */}
             {cards.length === 0 ? (
               <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300">
                 <IconCreditCard size={48} className="mx-auto text-gray-300 mb-4" />
                 <h3 className="text-lg font-bold text-gray-900 mb-1">Chưa có thẻ nào</h3>
-                <p className="text-gray-500 mb-6 text-sm max-w-sm mx-auto">Vui lòng bấm Thêm thẻ mới ở góc trên bên phải để bắt đầu thiết lập thông tin.</p>
+                <p className="text-gray-500 mb-6 text-sm">Vui lòng bấm Thêm thẻ mới để quản lý.</p>
                 <button onClick={handleOpenAddCard} className="bg-indigo-600 text-white px-5 py-2 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-sm">
                   + Tạo thẻ đầu tiên
                 </button>
@@ -490,7 +708,7 @@
                 {cards.map(card => (
                   <div key={card.id} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex flex-col hover:shadow-md transition-shadow">
                     
-                    {/* Minh họa thẻ tín dụng */}
+                    {/* Minh họa thẻ */}
                     <div 
                       className={`w-full h-44 rounded-2xl p-5 flex flex-col justify-between text-white shadow-md relative overflow-hidden mb-5 ${card.theme}`}
                       style={card.imageUrl ? { backgroundImage: `url(${card.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
@@ -510,7 +728,7 @@
                       </div>
                     </div>
 
-                    {/* Thông tin thẻ */}
+                    {/* Nội dung thông tin */}
                     <div className="flex-1 flex flex-col">
                       <div className="grid grid-cols-2 gap-3 mb-4">
                         <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
@@ -527,13 +745,13 @@
                         </div>
                       </div>
 
-                      {/* Trạng thái thẻ */}
+                      {/* Trạng thái thanh toán */}
                       <div className="mb-5 flex-1">
                         {card.isPaid ? (
                           <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3 flex items-start gap-3 text-emerald-800">
                             <IconCheckCircle className="mt-0.5 flex-shrink-0 text-emerald-600" size={18} />
                             <div>
-                              <p className="font-bold text-xs uppercase tracking-wider">Đã hoàn tất thanh toán</p>
+                              <p className="font-bold text-xs uppercase tracking-wider">Đã thanh toán xong</p>
                               <p className="text-[11px] text-emerald-600 mt-0.5">Ngày thực tế: {card.actualPaymentDate ? new Date(card.actualPaymentDate).toLocaleDateString('vi-VN') : 'N/A'}</p>
                             </div>
                           </div>
@@ -543,20 +761,20 @@
                               <IconAlertCircle className="mt-0.5 flex-shrink-0 text-orange-600" size={18} />
                               <div>
                                 <p className="font-bold text-xs uppercase tracking-wider">Chưa thanh toán</p>
-                                <p className="text-[11px] text-orange-600 mt-0.5">Vui lòng trả trước ngày {card.dueDay}</p>
+                                <p className="text-[11px] text-orange-600 mt-0.5">Hạn chót: ngày {card.dueDay}</p>
                               </div>
                             </div>
                             {card.reminderDate && card.reminderTime && (
                               <div className="flex items-center gap-1.5 text-[11px] bg-orange-100 px-2 py-1 rounded-md mt-1 w-fit font-semibold text-orange-900">
                                 <IconBell size={12} className="text-orange-600 animate-pulse" />
-                                Báo thức lúc: {card.reminderTime} - {new Date(card.reminderDate).toLocaleDateString('vi-VN')}
+                                Hẹn giờ: {card.reminderTime} - {new Date(card.reminderDate).toLocaleDateString('vi-VN')}
                               </div>
                             )}
                           </div>
                         )}
                       </div>
 
-                      {/* Nút hành động */}
+                      {/* Các nút sự kiện */}
                       <div className="flex gap-2 mt-auto">
                         {!card.isPaid ? (
                           <button 
@@ -599,9 +817,99 @@
             )}
           </main>
 
-          {/* --- CÁC MODALS POPUP --- */}
+          {/* --- CÁC POPUP MODALS --- */}
 
-          {/* 1. Modal Thêm/Sửa Thẻ */}
+          {/* 1. Modal Cloud Đồng Bộ Drive */}
+          <Modal 
+            isOpen={isCloudModalOpen} 
+            onClose={() => setIsCloudModalOpen(false)} 
+            title="Đồng Bộ Google Drive"
+          >
+            <div className="space-y-4">
+              <div className="p-3.5 bg-indigo-50 border border-indigo-100 rounded-xl">
+                <p className="text-xs text-indigo-900 font-semibold mb-1">Trạng thái: {cloudStatus}</p>
+                {googleUserEmail && <p className="text-xs text-gray-600 font-medium">Tài khoản: {googleUserEmail}</p>}
+              </div>
+
+              {!googleAccessToken ? (
+                <div className="space-y-3">
+                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                    Dữ liệu sẽ được lưu tự động thành file riêng tư trên Drive của bạn. Để bắt đầu, nhập <b>Google Client ID</b> và <b>API Key</b> thiết lập trên Google Console của tên miền này:
+                  </p>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Google Client ID</label>
+                    <input 
+                      type="text"
+                      className="w-full p-2.5 border border-gray-300 rounded-lg text-xs"
+                      placeholder="xxxxxxxx.apps.googleusercontent.com"
+                      value={googleConfig.clientId}
+                      onChange={e => setGoogleConfig({ ...googleConfig, clientId: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Google Developer API Key</label>
+                    <input 
+                      type="password"
+                      className="w-full p-2.5 border border-gray-300 rounded-lg text-xs"
+                      placeholder="AIzaSy..."
+                      value={googleConfig.apiKey}
+                      onChange={e => setGoogleConfig({ ...googleConfig, apiKey: e.target.value })}
+                    />
+                  </div>
+                  
+                  {googleConfig.clientId && googleConfig.apiKey && (
+                    <button 
+                      onClick={handleGoogleSignIn}
+                      className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-lg text-xs hover:bg-indigo-700 transition-colors"
+                    >
+                      Kết nối tài khoản Google
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <button 
+                    onClick={backupToDrive}
+                    disabled={isCloudLoading}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl text-xs transition-colors flex flex-col items-center gap-1"
+                  >
+                    <span>{isCloudLoading ? 'Đang thực hiện...' : 'Lưu lên Cloud'}</span>
+                    <span className="text-[10px] font-normal opacity-85">(Sao lưu)</span>
+                  </button>
+
+                  <button 
+                    onClick={restoreFromDrive}
+                    disabled={isCloudLoading}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl text-xs transition-colors flex flex-col items-center gap-1"
+                  >
+                    <span>{isCloudLoading ? 'Đang thực hiện...' : 'Khôi phục từ Cloud'}</span>
+                    <span className="text-[10px] font-normal opacity-85">(Tải xuống)</span>
+                  </button>
+
+                  <button 
+                    onClick={handleGoogleSignOut}
+                    className="col-span-2 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 rounded-xl text-xs transition-colors"
+                  >
+                    Đăng xuất Google Drive
+                  </button>
+                </div>
+              )}
+
+              <div className="border-t pt-4 mt-2">
+                <p className="text-[10px] text-gray-400 font-semibold mb-1">HƯỚNG DẪN LẤY API KEY / CLIENT ID:</p>
+                <ol className="list-decimal list-inside text-[10px] text-gray-500 space-y-1.5 leading-relaxed">
+                  <li>Vào <b>Google Cloud Console</b>.</li>
+                  <li>Tạo một Project mới bất kỳ.</li>
+                  <li>Cấu hình <b>OAuth Consent Screen</b> (External) & chọn Scope: <code className="bg-gray-100 p-0.5 rounded">.../auth/drive.file</code>.</li>
+                  <li>Vào <b>Credentials</b> -> Tạo <b>OAuth Client ID</b> (Chọn kiểu Web Application).</li>
+                  <li>Thêm domain hosting của bạn vào mục <b>Authorized JavaScript origins</b> (Ví dụ: <code className="bg-gray-100 p-0.5 rounded">https://mydomain.com</code>).</li>
+                  <li>Tạo tiếp <b>API Key</b> và copy dán vào form trên.</li>
+                </ol>
+              </div>
+            </div>
+          </Modal>
+
+          {/* 2. Modal Thêm/Sửa Thẻ */}
           <Modal 
             isOpen={isCardModalOpen} 
             onClose={() => setIsCardModalOpen(false)} 
@@ -704,13 +1012,13 @@
                 <button 
                   type="button" 
                   onClick={() => setIsCardModalOpen(false)}
-                  className="px-4 py-2 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold transition-colors"
+                  className="px-4 py-2 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold"
                 >
                   Hủy bỏ
                 </button>
                 <button 
                   type="submit"
-                  className="px-4 py-2 text-xs text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold transition-colors"
+                  className="px-4 py-2 text-xs text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold"
                 >
                   Lưu thông tin
                 </button>
@@ -718,7 +1026,7 @@
             </form>
           </Modal>
 
-          {/* 2. Modal Ghi Nhận Thanh Toán */}
+          {/* 3. Modal Ghi Nhận Thanh Toán */}
           <Modal 
             isOpen={isPaymentModalOpen} 
             onClose={() => setIsPaymentModalOpen(false)} 
@@ -750,13 +1058,13 @@
                   <button 
                     type="button" 
                     onClick={() => setIsPaymentModalOpen(false)}
-                    className="px-4 py-2 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold transition-colors"
+                    className="px-4 py-2 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold"
                   >
                     Hủy bỏ
                   </button>
                   <button 
                     type="submit"
-                    className="px-4 py-2 text-xs text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg font-bold transition-colors flex items-center gap-1"
+                    className="px-4 py-2 text-xs text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg font-bold flex items-center gap-1"
                   >
                     <IconCheckCircle size={14} /> Xác nhận đã thanh toán
                   </button>
@@ -765,7 +1073,7 @@
             )}
           </Modal>
 
-          {/* 3. Modal Nhập Sao Kê Kỳ Mới */}
+          {/* 4. Modal Nhập Sao Kê Kỳ Mới */}
           <Modal 
             isOpen={isStatementModalOpen} 
             onClose={() => setIsStatementModalOpen(false)} 
